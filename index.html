@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaaS B2B | Institutional Terminal</title>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #58a6ff;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+        }
+        #reloj {
+            text-align: center;
+            font-size: 1.2em;
+            color: #8b949e;
+            margin-bottom: 30px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .ticker-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #f0f6fc;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-family: monospace;
+            font-size: 1.1em;
+        }
+        .shock-alert {
+            background-color: #490202;
+            border: 1px solid #ff7b72;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            from { box-shadow: 0 0 5px #ff7b72; }
+            to { box-shadow: 0 0 20px #ff7b72; }
+        }
+        .status-badge {
+            font-size: 0.7em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: #238636;
+            color: white;
+        }
+        .status-badge.alert {
+            background: #da3633;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📡 DaaS Engine - Telemetría B2B</h1>
+    <div id="reloj">Conectando al servidor...</div>
+
+    <div class="grid-container" id="dashboard">
+        <!-- Las tarjetas de los activos aparecerán aquí -->
+    </div>
+
+    <script>
+        const API_BASE = "http://35.196.208.134:8000/api/v1/market/state";
+        
+        async function actualizarDatos() {
+            try {
+                // El parámetro nocache fuerza a Chrome a no usar datos antiguos
+                const response = await fetch(`${API_BASE}?nocache=${new Date().getTime()}`);
+                const json = await response.json();
+                
+                const reloj = document.getElementById('reloj');
+                const dashboard = document.getElementById('dashboard');
+
+                // Si el servidor está calentando y escupiendo el mensaje "detail"
+                if (json.detail) {
+                    reloj.innerText = "⏳ Motor DaaS calibrando Filtro de Kalman... Esperando volumen de mercado institucional.";
+                    reloj.style.color = "#8b949e";
+                    dashboard.innerHTML = ''; 
+                    return; 
+                }
+
+                // Si el servidor ya está mandando las matrices de datos reales
+                const ahora = new Date();
+                reloj.innerText = `🟢 Conectado. Última actualización: ${ahora.toLocaleTimeString()}`;
+                reloj.style.color = "#238636";
+                dashboard.innerHTML = ''; 
+
+                for (const [ticker, datos] of Object.entries(json.data)) {
+                    const zscore = datos.jerk_zscore.toFixed(2);
+                    const isShock = Math.abs(datos.jerk_zscore) >= 2.5;
+                    
+                    const card = document.createElement('div');
+                    card.className = `card ${isShock ? 'shock-alert' : ''}`;
+                    
+                    card.innerHTML = `
+                        <div class="ticker-name">
+                            ${ticker} 
+                            <span class="status-badge ${isShock ? 'alert' : ''}">
+                                ${isShock ? '🚨 SHOCK' : '✅ NORMAL'}
+                            </span>
+                        </div>
+                        <div class="metric"><span>Precio:</span> <span>$${datos.precio.toFixed(2)}</span></div>
+                        <div class="metric"><span>Velocidad:</span> <span>${datos.velocidad.toFixed(4)} $/s</span></div>
+                        <div class="metric"><span>Aceleración:</span> <span>${datos.aceleracion.toFixed(5)} $/s²</span></div>
+                        <div class="metric" style="color: ${isShock ? '#ff7b72' : '#58a6ff'}; font-weight: bold;">
+                            <span>Z-Score (Jerk):</span> <span>${zscore} σ</span>
+                        </div>
+                        <div class="metric" style="font-size: 0.9em; color: #8b949e; margin-top: 15px;">
+                            <span>Estado:</span> <span>${datos.regimen}</span>
+                        </div>
+                    `;
+                    dashboard.appendChild(card);
+                }
+            } catch (error) {
+                document.getElementById('reloj').innerText = "❌ Error de conexión o servidor reiniciando...";
+                document.getElementById('reloj').style.color = "#ff7b72";
+            }
+        }
+
+        actualizarDatos();
+        setInterval(actualizarDatos, 1000);
+    </script>
+</body>
+</html>
