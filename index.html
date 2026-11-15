@@ -38,6 +38,27 @@
             font-size: 1.1em;
             color: #a5d6ff;
         }
+        /* --- NUEVO: ESTILO PARA EL BOTÓN DE AUDIO --- */
+        #audio-btn {
+            background-color: #238636;
+            color: white;
+            border: 1px solid rgba(240, 246, 252, 0.1);
+            padding: 5px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        #audio-btn:hover {
+            background-color: #2ea043;
+        }
+        #audio-btn.muted {
+            background-color: #da3633;
+        }
+        #audio-btn.muted:hover {
+            background-color: #f85149;
+        }
+
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -100,6 +121,8 @@
     <div id="top-bar">
         <div id="reloj">Conectando al servidor...</div>
         <div id="latencia">Latencia: -- ms</div>
+        <!-- BOTÓN PARA ACTIVAR EL AUDIO -->
+        <button id="audio-btn" class="muted">🔇 Activar Sonido</button>
     </div>
 
     <div class="grid-container" id="dashboard">
@@ -107,31 +130,57 @@
     </div>
 
     <script>
-        // --- URL DE CLOUDFLARE ACTUALIZADA ---
         const API_BASE = "https://complications-salmon-experience-chrome.trycloudflare.com/api/v1/market/state";
         
         const memoriaAlertas = {}; 
 
-        function playPing() {
-            try {
+        // --- CONTROL DE AUDIO AUTORIZADO ---
+        let audioContextHabilitado = null;
+        let alertasSonorasActivadas = false;
+
+        const audioBtn = document.getElementById('audio-btn');
+        audioBtn.addEventListener('click', () => {
+            if (!alertasSonorasActivadas) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (!AudioContext) return;
+                if (AudioContext) {
+                    audioContextHabilitado = new AudioContext();
+                    const osc = audioContextHabilitado.createOscillator();
+                    osc.connect(audioContextHabilitado.destination);
+                    osc.start();
+                    osc.stop(audioContextHabilitado.currentTime + 0.01);
+                }
+                alertasSonorasActivadas = true;
+                audioBtn.innerText = "🔊 Sonido Activado";
+                audioBtn.classList.remove("muted");
+            } else {
+                alertasSonorasActivadas = false;
+                audioBtn.innerText = "🔇 Activar Sonido";
+                audioBtn.classList.add("muted");
+            }
+        });
+
+        function playPing() {
+            if (!alertasSonorasActivadas || !audioContextHabilitado) return;
+            
+            try {
+                if (audioContextHabilitado.state === 'suspended') {
+                    audioContextHabilitado.resume();
+                }
                 
-                const ctx = new AudioContext();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
+                const osc = audioContextHabilitado.createOscillator();
+                const gain = audioContextHabilitado.createGain();
                 
                 osc.connect(gain);
-                gain.connect(ctx.destination);
+                gain.connect(audioContextHabilitado.destination);
                 
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(850, ctx.currentTime);
-                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.type = 'sine'; 
+                osc.frequency.setValueAtTime(850, audioContextHabilitado.currentTime); 
+                gain.gain.setValueAtTime(0.1, audioContextHabilitado.currentTime);
                 
                 osc.start();
-                osc.stop(ctx.currentTime + 0.15);
+                osc.stop(audioContextHabilitado.currentTime + 0.15); 
             } catch (e) {
-                console.log("Audio bloqueado por el navegador hasta que el usuario interactúe.");
+                console.log("Error al reproducir audio:", e);
             }
         }
         
@@ -139,7 +188,7 @@
             try {
                 const startFetch = performance.now();
                 
-                // --- PETICIÓN CON LA LLAVE DE SEGURIDAD (X-API-Key) INYECTADA ---
+                // AQUÍ ESTÁ LA MAGIA: INYECTAMOS LA LLAVE X-API-KEY
                 const response = await fetch(`${API_BASE}?nocache=${new Date().getTime()}`, {
                     method: "GET",
                     headers: {
@@ -154,7 +203,7 @@
                 const latenciaDiv = document.getElementById('latencia');
                 const dashboard = document.getElementById('dashboard');
 
-                // Si la API devuelve un 403 (Acceso Denegado por error en la clave)
+                // BLOQUEO DE SEGURIDAD 403 CONTROLADO EN PANTALLA
                 if (response.status === 403) {
                     reloj.innerText = "⛔ Acceso Denegado: Licencia B2B inválida";
                     reloj.style.color = "#ff7b72";
@@ -164,14 +213,17 @@
                 }
 
                 const json = await response.json();
-
-                // Si el Filtro de Kalman sigue calentando (HTTP 503 controlado por Python)
+                
                 if (json.detail) {
                     reloj.innerText = "⏳ Motor DaaS calibrando Filtro de Kalman...";
                     reloj.style.color = "#8b949e";
                     latenciaDiv.innerText = `Latencia: -- ms`;
                     dashboard.innerHTML = ''; 
                     return; 
+                }
+                
+                if (!json.data || Object.keys(json.data).length === 0) {
+                    return;
                 }
 
                 const ahora = new Date();
@@ -184,7 +236,7 @@
                 dashboard.innerHTML = ''; 
 
                 for (const [ticker, datos] of Object.entries(json.data)) {
-                    const zscore = datos.jerk_zscore.toFixed(2);
+                    const zscore = parseFloat(datos.jerk_zscore).toFixed(2);
                     const regimen = datos.regimen || ""; 
                     
                     let claseAlerta = "";
@@ -192,7 +244,7 @@
                     let textoBadge = "✅ NORMAL";
                     let colorZScore = "#58a6ff"; 
                     
-                    const esPeligro = regimen.includes("CAÍDA LIBRE") || regimen.includes("SHOCK NEGATIVO") || regimen.includes("COLAPSO");
+                    const esPeligro = regimen.includes("CAÍDA LIBRE") || regimen.includes("SHOCK NEGATIVO") || regimen.includes("COLAPSO") || regimen.includes("FRENADA BRUSCA");
                     const esExito = regimen.includes("IGNICIÓN") || regimen.includes("SHOCK POSITIVO");
 
                     if (esPeligro) {
@@ -203,7 +255,7 @@
                         
                         if (!memoriaAlertas[ticker]) {
                             playPing();
-                            memoriaAlertas[ticker] = true;
+                            memoriaAlertas[ticker] = true; 
                         }
                     } else if (esExito) {
                         claseAlerta = "alerta-exito";
@@ -226,9 +278,9 @@
                                 ${textoBadge}
                             </span>
                         </div>
-                        <div class="metric"><span>Precio:</span> <span>$${datos.precio.toFixed(2)}</span></div>
-                        <div class="metric"><span>Velocidad:</span> <span>${datos.velocidad.toFixed(4)} $/s</span></div>
-                        <div class="metric"><span>Aceleración:</span> <span>${datos.aceleracion.toFixed(5)} $/s²</span></div>
+                        <div class="metric"><span>Precio:</span> <span>$${parseFloat(datos.precio).toFixed(2)}</span></div>
+                        <div class="metric"><span>Velocidad:</span> <span>${parseFloat(datos.velocidad).toFixed(4)} $/s</span></div>
+                        <div class="metric"><span>Aceleración:</span> <span>${parseFloat(datos.aceleracion).toFixed(5)} $/s²</span></div>
                         <div class="metric" style="color: ${colorZScore}; font-weight: bold;">
                             <span>Z-Score (Jerk):</span> <span>${zscore} σ</span>
                         </div>
