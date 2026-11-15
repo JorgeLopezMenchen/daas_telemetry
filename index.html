@@ -18,11 +18,25 @@
             border-bottom: 1px solid #30363d;
             padding-bottom: 10px;
         }
+        #top-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
         #reloj {
-            text-align: center;
             font-size: 1.2em;
             color: #8b949e;
-            margin-bottom: 30px;
+        }
+        #latencia {
+            font-family: monospace;
+            background-color: #1f2428;
+            border: 1px solid #444c56;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 1.1em;
+            color: #a5d6ff;
         }
         .grid-container {
             display: grid;
@@ -37,6 +51,7 @@
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
         }
         .ticker-name {
             font-size: 1.5em;
@@ -53,84 +68,172 @@
             font-family: monospace;
             font-size: 1.1em;
         }
-        .shock-alert {
-            background-color: #490202;
-            border: 1px solid #ff7b72;
-            animation: pulse 1s infinite alternate;
+        
+        @keyframes flashRed {
+            0% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220,38,38,0.5); }
+            50% { background-color: #161b22; box-shadow: none; }
+            100% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220,38,38,0.5); }
         }
-        @keyframes pulse {
-            from { box-shadow: 0 0 5px #ff7b72; }
-            to { box-shadow: 0 0 20px #ff7b72; }
+        @keyframes flashGreen {
+            0% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22,163,74,0.5); }
+            50% { background-color: #161b22; box-shadow: none; }
+            100% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22,163,74,0.5); }
         }
+        .alerta-peligro { animation: flashRed 1s infinite !important; border-color: #ef4444 !important; }
+        .alerta-exito { animation: flashGreen 1s infinite !important; border-color: #22c55e !important; }
+
         .status-badge {
             font-size: 0.7em;
             padding: 4px 8px;
             border-radius: 12px;
             background: #238636;
             color: white;
+            font-weight: bold;
         }
-        .status-badge.alert {
-            background: #da3633;
-        }
+        .status-badge.alert-red { background: #da3633; }
+        .status-badge.alert-green { background: #22c55e; }
     </style>
 </head>
 <body>
 
     <h1>📡 DaaS Engine - Telemetría B2B</h1>
-    <div id="reloj">Conectando al servidor...</div>
+    <div id="top-bar">
+        <div id="reloj">Conectando al servidor...</div>
+        <div id="latencia">Latencia: -- ms</div>
+    </div>
 
     <div class="grid-container" id="dashboard">
         <!-- Las tarjetas de los activos aparecerán aquí -->
     </div>
 
     <script>
-        const API_BASE = "https://daas-engine.duckdns.org/api/v1/market/state";
+        // --- URL DE CLOUDFLARE ACTUALIZADA ---
+        const API_BASE = "https://complications-salmon-experience-chrome.trycloudflare.com/api/v1/market/state";
+        
+        const memoriaAlertas = {}; 
+
+        function playPing() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(850, ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (e) {
+                console.log("Audio bloqueado por el navegador hasta que el usuario interactúe.");
+            }
+        }
         
         async function actualizarDatos() {
             try {
-                // El parámetro nocache fuerza a Chrome a no usar datos antiguos
-                const response = await fetch(`${API_BASE}?nocache=${new Date().getTime()}`);
-                const json = await response.json();
+                const startFetch = performance.now();
+                
+                // --- PETICIÓN CON LA LLAVE DE SEGURIDAD (X-API-Key) INYECTADA ---
+                const response = await fetch(`${API_BASE}?nocache=${new Date().getTime()}`, {
+                    method: "GET",
+                    headers: {
+                        "X-API-Key": "Fondo Quant A"
+                    }
+                });
+                
+                const endFetch = performance.now();
+                const latenciaMs = Math.round(endFetch - startFetch);
                 
                 const reloj = document.getElementById('reloj');
+                const latenciaDiv = document.getElementById('latencia');
                 const dashboard = document.getElementById('dashboard');
 
-                // Si el servidor está calentando y escupiendo el mensaje "detail"
+                // Si la API devuelve un 403 (Acceso Denegado por error en la clave)
+                if (response.status === 403) {
+                    reloj.innerText = "⛔ Acceso Denegado: Licencia B2B inválida";
+                    reloj.style.color = "#ff7b72";
+                    latenciaDiv.innerText = `Latencia: -- ms`;
+                    dashboard.innerHTML = ''; 
+                    return;
+                }
+
+                const json = await response.json();
+
+                // Si el Filtro de Kalman sigue calentando (HTTP 503 controlado por Python)
                 if (json.detail) {
-                    reloj.innerText = "⏳ Motor DaaS calibrando Filtro de Kalman... Esperando volumen de mercado institucional.";
+                    reloj.innerText = "⏳ Motor DaaS calibrando Filtro de Kalman...";
                     reloj.style.color = "#8b949e";
+                    latenciaDiv.innerText = `Latencia: -- ms`;
                     dashboard.innerHTML = ''; 
                     return; 
                 }
 
-                // Si el servidor ya está mandando las matrices de datos reales
                 const ahora = new Date();
                 reloj.innerText = `🟢 Conectado. Última actualización: ${ahora.toLocaleTimeString()}`;
                 reloj.style.color = "#238636";
+                
+                latenciaDiv.innerText = `Latencia de red: ${latenciaMs} ms`;
+                latenciaDiv.style.color = latenciaMs > 300 ? '#d29922' : '#a5d6ff';
+
                 dashboard.innerHTML = ''; 
 
                 for (const [ticker, datos] of Object.entries(json.data)) {
                     const zscore = datos.jerk_zscore.toFixed(2);
-                    const isShock = Math.abs(datos.jerk_zscore) >= 2.5;
+                    const regimen = datos.regimen || ""; 
                     
+                    let claseAlerta = "";
+                    let claseBadge = "";
+                    let textoBadge = "✅ NORMAL";
+                    let colorZScore = "#58a6ff"; 
+                    
+                    const esPeligro = regimen.includes("CAÍDA LIBRE") || regimen.includes("SHOCK NEGATIVO") || regimen.includes("COLAPSO");
+                    const esExito = regimen.includes("IGNICIÓN") || regimen.includes("SHOCK POSITIVO");
+
+                    if (esPeligro) {
+                        claseAlerta = "alerta-peligro";
+                        claseBadge = "alert-red";
+                        textoBadge = "🚨 PELIGRO";
+                        colorZScore = "#ff7b72";
+                        
+                        if (!memoriaAlertas[ticker]) {
+                            playPing();
+                            memoriaAlertas[ticker] = true;
+                        }
+                    } else if (esExito) {
+                        claseAlerta = "alerta-exito";
+                        claseBadge = "alert-green";
+                        textoBadge = "🔥 IGNICIÓN";
+                        colorZScore = "#22c55e";
+                        
+                        memoriaAlertas[ticker] = false; 
+                    } else {
+                        memoriaAlertas[ticker] = false;
+                    }
+
                     const card = document.createElement('div');
-                    card.className = `card ${isShock ? 'shock-alert' : ''}`;
+                    card.className = `card ${claseAlerta}`;
                     
                     card.innerHTML = `
                         <div class="ticker-name">
                             ${ticker} 
-                            <span class="status-badge ${isShock ? 'alert' : ''}">
-                                ${isShock ? '🚨 SHOCK' : '✅ NORMAL'}
+                            <span class="status-badge ${claseBadge}">
+                                ${textoBadge}
                             </span>
                         </div>
                         <div class="metric"><span>Precio:</span> <span>$${datos.precio.toFixed(2)}</span></div>
                         <div class="metric"><span>Velocidad:</span> <span>${datos.velocidad.toFixed(4)} $/s</span></div>
                         <div class="metric"><span>Aceleración:</span> <span>${datos.aceleracion.toFixed(5)} $/s²</span></div>
-                        <div class="metric" style="color: ${isShock ? '#ff7b72' : '#58a6ff'}; font-weight: bold;">
+                        <div class="metric" style="color: ${colorZScore}; font-weight: bold;">
                             <span>Z-Score (Jerk):</span> <span>${zscore} σ</span>
                         </div>
                         <div class="metric" style="font-size: 0.9em; color: #8b949e; margin-top: 15px;">
-                            <span>Estado:</span> <span>${datos.regimen}</span>
+                            <span>Estado:</span> <span>${regimen}</span>
                         </div>
                     `;
                     dashboard.appendChild(card);
@@ -138,6 +241,7 @@
             } catch (error) {
                 document.getElementById('reloj').innerText = "❌ Error de conexión o servidor reiniciando...";
                 document.getElementById('reloj').style.color = "#ff7b72";
+                document.getElementById('latencia').innerText = `Latencia: -- ms`;
             }
         }
 
