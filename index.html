@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DaaS B2B | Institutional Terminal</title>
+    <title>Leviatan Quant | Terminal Institucional 4D</title>
+    <meta name="robots" content="noindex, nofollow">
     <style>
         body {
             background-color: #0d1117;
@@ -12,21 +13,64 @@
             margin: 0;
             padding: 20px;
         }
-        h1 {
-            text-align: center;
-            color: #58a6ff;
+        header {
+            max-width: 1200px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 1px solid #30363d;
-            padding-bottom: 10px;
+            padding-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 12px;
         }
+        .brand {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #f0f6fc;
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        .brand span {
+            color: #00ffcc;
+        }
+        .header-subtitle {
+            font-size: 0.85em;
+            color: #8b949e;
+            margin-left: 10px;
+            font-weight: 400;
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-btn {
+            background: transparent;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            text-decoration: none;
+            transition: border-color 0.2s, color 0.2s;
+        }
+        .nav-btn:hover {
+            border-color: #00ffcc;
+            color: #00ffcc;
+        }
+
         #top-bar {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
             margin-bottom: 30px;
         }
         #reloj {
-            font-size: 1.2em;
+            font-size: 1.1em;
             color: #8b949e;
         }
         #latencia {
@@ -35,28 +79,82 @@
             border: 1px solid #444c56;
             padding: 5px 10px;
             border-radius: 5px;
-            font-size: 1.1em;
-            color: #a5d6ff;
+            font-size: 1em;
+            color: #00ffcc;
         }
-        /* --- NUEVO: ESTILO PARA EL BOTÓN DE AUDIO --- */
         #audio-btn {
             background-color: #238636;
             color: white;
             border: 1px solid rgba(240, 246, 252, 0.1);
-            padding: 5px 15px;
+            padding: 6px 15px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
             transition: background-color 0.2s;
         }
-        #audio-btn:hover {
-            background-color: #2ea043;
+        #audio-btn:hover { background-color: #2ea043; }
+        #audio-btn.muted { background-color: #da3633; }
+        #audio-btn.muted:hover { background-color: #f85149; }
+
+        /* Panel de autenticación B2B */
+        #auth-panel {
+            max-width: 440px;
+            margin: 60px auto;
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 28px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
         }
-        #audio-btn.muted {
-            background-color: #da3633;
+        #auth-panel h2 {
+            margin: 0 0 8px 0;
+            color: #f0f6fc;
+            font-size: 1.3em;
         }
-        #audio-btn.muted:hover {
-            background-color: #f85149;
+        #auth-panel p {
+            margin: 0 0 20px 0;
+            color: #8b949e;
+            font-size: 0.92em;
+            line-height: 1.4;
+        }
+        #api-key-input {
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 11px 12px;
+            color: #f0f6fc;
+            font-family: monospace;
+            font-size: 0.95em;
+            margin-bottom: 14px;
+            outline: none;
+        }
+        #api-key-input:focus {
+            border-color: #00ffcc;
+        }
+        #auth-submit {
+            width: 100%;
+            background-color: #00ffcc;
+            color: #0d1117;
+            border: none;
+            border-radius: 6px;
+            padding: 11px;
+            font-weight: 700;
+            font-size: 0.95em;
+            cursor: pointer;
+        }
+        #auth-submit:hover {
+            opacity: 0.9;
+        }
+        #auth-error {
+            color: #ff7b72;
+            font-size: 0.88em;
+            margin-top: 12px;
+            min-height: 1.2em;
+        }
+        .hidden {
+            display: none !important;
         }
 
         .grid-container {
@@ -71,7 +169,7 @@
             border: 1px solid #30363d;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
         }
         .ticker-name {
@@ -81,6 +179,7 @@
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }
         .metric {
             display: flex;
@@ -89,22 +188,22 @@
             font-family: monospace;
             font-size: 1.1em;
         }
-        
+
         @keyframes flashRed {
-            0% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220,38,38,0.5); }
+            0% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220, 38, 38, 0.5); }
             50% { background-color: #161b22; box-shadow: none; }
-            100% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220,38,38,0.5); }
+            100% { background-color: rgba(220, 38, 38, 0.3); box-shadow: 0 0 15px rgba(220, 38, 38, 0.5); }
         }
         @keyframes flashGreen {
-            0% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22,163,74,0.5); }
+            0% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22, 163, 74, 0.5); }
             50% { background-color: #161b22; box-shadow: none; }
-            100% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22,163,74,0.5); }
+            100% { background-color: rgba(22, 163, 74, 0.3); box-shadow: 0 0 15px rgba(22, 163, 74, 0.5); }
         }
         .alerta-peligro { animation: flashRed 1s infinite !important; border-color: #ef4444 !important; }
         .alerta-exito { animation: flashGreen 1s infinite !important; border-color: #22c55e !important; }
 
         .status-badge {
-            font-size: 0.7em;
+            font-size: 0.65em;
             padding: 4px 8px;
             border-radius: 12px;
             background: #238636;
@@ -117,29 +216,63 @@
 </head>
 <body>
 
-    <h1>📡 DaaS Engine - Telemetría B2B</h1>
-    <div id="top-bar">
-        <div id="reloj">Conectando al servidor...</div>
-        <div id="latencia">Latencia: -- ms</div>
-        <!-- BOTÓN PARA ACTIVAR EL AUDIO -->
-        <button id="audio-btn" class="muted">🔇 Activar Sonido</button>
-    </div>
+    <header>
+        <div>
+            <a href="https://leviatan-quant.com" class="brand">Leviatan<span>Quant</span></a>
+            <span class="header-subtitle">Terminal de Telemetría 4D</span>
+        </div>
+        <div class="header-actions">
+            <a href="https://api.leviatan-quant.com/docs" target="_blank" class="nav-btn">API Docs</a>
+            <button id="change-key-btn" class="nav-btn hidden">Cambiar Licencia</button>
+        </div>
+    </header>
 
-    <div class="grid-container" id="dashboard">
-        <!-- Las tarjetas de los activos aparecerán aquí -->
-    </div>
+    <!-- Acceso por X-API-Key (guardada localmente en el navegador) -->
+    <section id="auth-panel" class="hidden">
+        <h2>Acceso Institucional B2B</h2>
+        <p>Introduce tu licencia <code>X-API-Key</code> para conectar con el flujo Kalman 4D de la cesta institucional.</p>
+        <form id="auth-form">
+            <input type="password" id="api-key-input" placeholder="Introduce tu X-API-Key..." autocomplete="off" required>
+            <button type="submit" id="auth-submit">Conectar Terminal</button>
+        </form>
+        <div id="auth-error"></div>
+    </section>
+
+    <!-- Barra de estado y cuadrícula de telemetría -->
+    <main id="terminal-view" class="hidden">
+        <div id="top-bar">
+            <div id="reloj">Conectando al servidor...</div>
+            <div id="latencia">Latencia: -- ms</div>
+            <button id="audio-btn" class="muted">🔇 Activar Sonido</button>
+        </div>
+
+        <div class="grid-container" id="dashboard"></div>
+    </main>
 
     <script>
         const API_BASE = "https://api.leviatan-quant.com/api/v1/market/state";
-        
-        const memoriaAlertas = {}; 
+        const STORAGE_KEY = "leviatan_api_key";
+
+        const authPanel = document.getElementById("auth-panel");
+        const authForm = document.getElementById("auth-form");
+        const apiKeyInput = document.getElementById("api-key-input");
+        const authError = document.getElementById("auth-error");
+        const terminalView = document.getElementById("terminal-view");
+        const changeKeyBtn = document.getElementById("change-key-btn");
+        const reloj = document.getElementById("reloj");
+        const latenciaDiv = document.getElementById("latencia");
+        const dashboard = document.getElementById("dashboard");
+        const audioBtn = document.getElementById("audio-btn");
+
+        const memoriaAlertas = {};
+        let pollingTimer = null;
+        let activeApiKey = localStorage.getItem(STORAGE_KEY) || "";
 
         // --- CONTROL DE AUDIO AUTORIZADO ---
         let audioContextHabilitado = null;
         let alertasSonorasActivadas = false;
 
-        const audioBtn = document.getElementById('audio-btn');
-        audioBtn.addEventListener('click', () => {
+        audioBtn.addEventListener("click", () => {
             if (!alertasSonorasActivadas) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (AudioContext) {
@@ -161,89 +294,132 @@
 
         function playPing() {
             if (!alertasSonorasActivadas || !audioContextHabilitado) return;
-            
             try {
-                if (audioContextHabilitado.state === 'suspended') {
+                if (audioContextHabilitado.state === "suspended") {
                     audioContextHabilitado.resume();
                 }
-                
                 const osc = audioContextHabilitado.createOscillator();
                 const gain = audioContextHabilitado.createGain();
-                
                 osc.connect(gain);
                 gain.connect(audioContextHabilitado.destination);
-                
-                osc.type = 'sine'; 
-                osc.frequency.setValueAtTime(850, audioContextHabilitado.currentTime); 
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(850, audioContextHabilitado.currentTime);
                 gain.gain.setValueAtTime(0.1, audioContextHabilitado.currentTime);
-                
                 osc.start();
-                osc.stop(audioContextHabilitado.currentTime + 0.15); 
+                osc.stop(audioContextHabilitado.currentTime + 0.15);
             } catch (e) {
                 console.log("Error al reproducir audio:", e);
             }
         }
-        
+
+        function stopPolling() {
+            if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+            }
+        }
+
+        function showAuthScreen(errorMsg = "") {
+            stopPolling();
+            terminalView.classList.add("hidden");
+            changeKeyBtn.classList.add("hidden");
+            authPanel.classList.remove("hidden");
+            authError.innerText = errorMsg;
+            apiKeyInput.value = "";
+            apiKeyInput.focus();
+        }
+
+        function startTerminal(key) {
+            activeApiKey = key.trim();
+            localStorage.setItem(STORAGE_KEY, activeApiKey);
+            authError.innerText = "";
+            authPanel.classList.add("hidden");
+            terminalView.classList.remove("hidden");
+            changeKeyBtn.classList.remove("hidden");
+
+            stopPolling();
+            actualizarDatos();
+            // 1500ms = 40 req/min (compatible tanto con Sandbox 60 rpm como Institucional 600 rpm)
+            pollingTimer = setInterval(actualizarDatos, 1500);
+        }
+
+        authForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const enteredKey = apiKeyInput.value.trim();
+            if (!enteredKey) return;
+            startTerminal(enteredKey);
+        });
+
+        changeKeyBtn.addEventListener("click", () => {
+            localStorage.removeItem(STORAGE_KEY);
+            activeApiKey = "";
+            dashboard.innerHTML = "";
+            showAuthScreen("");
+        });
+
         async function actualizarDatos() {
+            if (!activeApiKey) {
+                showAuthScreen();
+                return;
+            }
+
             try {
                 const startFetch = performance.now();
-                
-                // AQUÍ ESTÁ LA MAGIA: INYECTAMOS LA LLAVE X-API-KEY
-                const response = await fetch(`${API_BASE}?nocache=${new Date().getTime()}`, {
+                const response = await fetch(`${API_BASE}?nocache=${Date.now()}`, {
                     method: "GET",
                     headers: {
-                        "X-API-Key": "Fondo Quant A"
+                        "X-API-Key": activeApiKey
                     }
                 });
-                
-                const endFetch = performance.now();
-                const latenciaMs = Math.round(endFetch - startFetch);
-                
-                const reloj = document.getElementById('reloj');
-                const latenciaDiv = document.getElementById('latencia');
-                const dashboard = document.getElementById('dashboard');
+                const latenciaMs = Math.round(performance.now() - startFetch);
 
-                // BLOQUEO DE SEGURIDAD 403 CONTROLADO EN PANTALLA
                 if (response.status === 403) {
-                    reloj.innerText = "⛔ Acceso Denegado: Licencia B2B inválida";
-                    reloj.style.color = "#ff7b72";
-                    latenciaDiv.innerText = `Latencia: -- ms`;
-                    dashboard.innerHTML = ''; 
+                    localStorage.removeItem(STORAGE_KEY);
+                    activeApiKey = "";
+                    dashboard.innerHTML = "";
+                    showAuthScreen("⛔ Acceso denegado: Licencia B2B inválida o revocada.");
+                    return;
+                }
+
+                if (response.status === 429) {
+                    reloj.innerText = "⚠️ Rate limit excedido. Reduciendo frecuencia...";
+                    reloj.style.color = "#d29922";
+                    latenciaDiv.innerText = `Latencia: ${latenciaMs} ms`;
                     return;
                 }
 
                 const json = await response.json();
-                
-                if (json.detail) {
-                    reloj.innerText = "⏳ Motor DaaS calibrando Filtro de Kalman...";
+
+                if (response.status === 503 || json.detail) {
+                    reloj.innerText = "🕒 Mercado cerrado / Esperando barras en vivo de Alpaca...";
                     reloj.style.color = "#8b949e";
-                    latenciaDiv.innerText = `Latencia: -- ms`;
-                    dashboard.innerHTML = ''; 
-                    return; 
+                    latenciaDiv.innerText = `Latencia: ${latenciaMs} ms`;
+                    dashboard.innerHTML = "";
+                    return;
                 }
-                
+
                 if (!json.data || Object.keys(json.data).length === 0) {
                     return;
                 }
 
                 const ahora = new Date();
                 reloj.innerText = `🟢 Conectado. Última actualización: ${ahora.toLocaleTimeString()}`;
-                reloj.style.color = "#238636";
-                
-                latenciaDiv.innerText = `Latencia de red: ${latenciaMs} ms`;
-                latenciaDiv.style.color = latenciaMs > 300 ? '#d29922' : '#a5d6ff';
+                reloj.style.color = "#22c55e";
 
-                dashboard.innerHTML = ''; 
+                latenciaDiv.innerText = `Latencia de red: ${latenciaMs} ms`;
+                latenciaDiv.style.color = latenciaMs > 300 ? "#d29922" : "#00ffcc";
+
+                dashboard.innerHTML = "";
 
                 for (const [ticker, datos] of Object.entries(json.data)) {
                     const zscore = parseFloat(datos.jerk_zscore).toFixed(2);
-                    const regimen = datos.regimen || ""; 
-                    
+                    const regimen = datos.regimen || "";
+
                     let claseAlerta = "";
                     let claseBadge = "";
                     let textoBadge = "✅ NORMAL";
-                    let colorZScore = "#58a6ff"; 
-                    
+                    let colorZScore = "#00ffcc";
+
                     const esPeligro = regimen.includes("CAÍDA LIBRE") || regimen.includes("SHOCK NEGATIVO") || regimen.includes("COLAPSO") || regimen.includes("FRENADA BRUSCA");
                     const esExito = regimen.includes("IGNICIÓN") || regimen.includes("SHOCK POSITIVO");
 
@@ -252,28 +428,27 @@
                         claseBadge = "alert-red";
                         textoBadge = "🚨 PELIGRO";
                         colorZScore = "#ff7b72";
-                        
+
                         if (!memoriaAlertas[ticker]) {
                             playPing();
-                            memoriaAlertas[ticker] = true; 
+                            memoriaAlertas[ticker] = true;
                         }
                     } else if (esExito) {
                         claseAlerta = "alerta-exito";
                         claseBadge = "alert-green";
                         textoBadge = "🔥 IGNICIÓN";
                         colorZScore = "#22c55e";
-                        
-                        memoriaAlertas[ticker] = false; 
+                        memoriaAlertas[ticker] = false;
                     } else {
                         memoriaAlertas[ticker] = false;
                     }
 
-                    const card = document.createElement('div');
+                    const card = document.createElement("div");
                     card.className = `card ${claseAlerta}`;
-                    
+
                     card.innerHTML = `
                         <div class="ticker-name">
-                            ${ticker} 
+                            ${ticker}
                             <span class="status-badge ${claseBadge}">
                                 ${textoBadge}
                             </span>
@@ -291,14 +466,18 @@
                     dashboard.appendChild(card);
                 }
             } catch (error) {
-                document.getElementById('reloj').innerText = "❌ Error de conexión o servidor reiniciando...";
-                document.getElementById('reloj').style.color = "#ff7b72";
-                document.getElementById('latencia').innerText = `Latencia: -- ms`;
+                reloj.innerText = "❌ Error de conexión o servidor reiniciando...";
+                reloj.style.color = "#ff7b72";
+                latenciaDiv.innerText = "Latencia: -- ms";
             }
         }
 
-        actualizarDatos();
-        setInterval(actualizarDatos, 1000);
+        // Arranque inicial
+        if (activeApiKey) {
+            startTerminal(activeApiKey);
+        } else {
+            showAuthScreen();
+        }
     </script>
 </body>
 </html>
