@@ -239,6 +239,7 @@
         }
         .status-badge.alert-red { background: #da3633; }
         .status-badge.alert-green { background: #22c55e; }
+        .status-badge.alert-amber { background: #9e6a03; }
     </style>
 </head>
 <body>
@@ -383,8 +384,8 @@
                 const esPeligro =
                     regimen.includes("CAÍDA LIBRE") ||
                     regimen.includes("SHOCK NEGATIVO") ||
-                    regimen.includes("COLAPSO") ||
-                    regimen.includes("FRENADA BRUSCA");
+                    regimen.includes("COLAPSO");
+                const esFrenada = regimen.includes("FRENADA BRUSCA");
                 const esExito =
                     regimen.includes("IGNICIÓN") ||
                     regimen.includes("SHOCK POSITIVO");
@@ -399,6 +400,11 @@
                         playPing();
                         memoriaAlertas[ticker] = true;
                     }
+                } else if (esFrenada) {
+                    claseBadge = "alert-amber";
+                    textoBadge = "⚠️ FRENADA";
+                    colorZScore = "#d29922";
+                    memoriaAlertas[ticker] = false;
                 } else if (esExito) {
                     claseAlerta = "alerta-exito";
                     claseBadge = "alert-green";
