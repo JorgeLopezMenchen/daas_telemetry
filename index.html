@@ -66,21 +66,24 @@
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
-            gap: 16px;
+            gap: 14px;
             margin-bottom: 30px;
         }
         #reloj {
-            font-size: 1.1em;
+            font-size: 1.05em;
             color: #8b949e;
         }
-        #latencia {
+        .pill {
             font-family: monospace;
             background-color: #1f2428;
             border: 1px solid #444c56;
             padding: 5px 10px;
             border-radius: 5px;
-            font-size: 1em;
+            font-size: 0.95em;
             color: #00ffcc;
+        }
+        #transport-badge {
+            color: #58a6ff;
         }
         #audio-btn {
             background-color: #238636;
@@ -96,7 +99,6 @@
         #audio-btn.muted { background-color: #da3633; }
         #audio-btn.muted:hover { background-color: #f85149; }
 
-        /* Panel de autenticación B2B */
         #auth-panel {
             max-width: 440px;
             margin: 60px auto;
@@ -173,20 +175,44 @@
             transition: all 0.3s ease;
         }
         .ticker-name {
-            font-size: 1.5em;
+            font-size: 1.45em;
             font-weight: bold;
             color: #f0f6fc;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
+        }
+        .ticker-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .session-tag {
+            font-size: 0.48em;
+            font-family: monospace;
+            padding: 3px 6px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+            letter-spacing: 0.5px;
+        }
+        .session-rth {
+            color: #00ffcc;
+            border-color: rgba(0, 255, 204, 0.4);
+            background-color: rgba(0, 255, 204, 0.08);
+        }
+        .session-ext {
+            color: #d29922;
+            border-color: rgba(210, 153, 34, 0.4);
+            background-color: rgba(210, 153, 34, 0.1);
         }
         .metric {
             display: flex;
             justify-content: space-between;
             margin: 8px 0;
             font-family: monospace;
-            font-size: 1.1em;
+            font-size: 1.08em;
         }
 
         @keyframes flashRed {
@@ -203,12 +229,13 @@
         .alerta-exito { animation: flashGreen 1s infinite !important; border-color: #22c55e !important; }
 
         .status-badge {
-            font-size: 0.65em;
+            font-size: 0.62em;
             padding: 4px 8px;
             border-radius: 12px;
             background: #238636;
             color: white;
             font-weight: bold;
+            white-space: nowrap;
         }
         .status-badge.alert-red { background: #da3633; }
         .status-badge.alert-green { background: #22c55e; }
@@ -227,10 +254,9 @@
         </div>
     </header>
 
-    <!-- Acceso por X-API-Key (guardada localmente en el navegador) -->
     <section id="auth-panel" class="hidden">
         <h2>Acceso Institucional B2B</h2>
-        <p>Introduce tu licencia <code>X-API-Key</code> para conectar con el flujo Kalman 4D de la cesta institucional.</p>
+        <p>Introduce tu licencia <code>X-API-Key</code> para conectar al flujo en tiempo real del Filtro de Kalman 4D.</p>
         <form id="auth-form">
             <input type="password" id="api-key-input" placeholder="Introduce tu X-API-Key..." autocomplete="off" required>
             <button type="submit" id="auth-submit">Conectar Terminal</button>
@@ -238,11 +264,11 @@
         <div id="auth-error"></div>
     </section>
 
-    <!-- Barra de estado y cuadrícula de telemetría -->
     <main id="terminal-view" class="hidden">
         <div id="top-bar">
-            <div id="reloj">Conectando al servidor...</div>
-            <div id="latencia">Latencia: -- ms</div>
+            <div id="reloj">Conectando al stream Kalman 4D...</div>
+            <div id="transport-badge" class="pill">Canal: --</div>
+            <div id="latencia" class="pill">Latencia: -- ms</div>
             <button id="audio-btn" class="muted">🔇 Activar Sonido</button>
         </div>
 
@@ -250,6 +276,7 @@
     </main>
 
     <script>
+        const WS_BASE = "wss://api.leviatan-quant.com/ws/v1/stream";
         const API_BASE = "https://api.leviatan-quant.com/api/v1/market/state";
         const STORAGE_KEY = "leviatan_api_key";
 
@@ -260,13 +287,19 @@
         const terminalView = document.getElementById("terminal-view");
         const changeKeyBtn = document.getElementById("change-key-btn");
         const reloj = document.getElementById("reloj");
+        const transportBadge = document.getElementById("transport-badge");
         const latenciaDiv = document.getElementById("latencia");
         const dashboard = document.getElementById("dashboard");
         const audioBtn = document.getElementById("audio-btn");
 
         const memoriaAlertas = {};
-        let pollingTimer = null;
         let activeApiKey = localStorage.getItem(STORAGE_KEY) || "";
+        let ws = null;
+        let wsPingTimer = null;
+        let wsReconnectTimer = null;
+        let restPollingTimer = null;
+        let lastPingSent = 0;
+        let manualDisconnect = false;
 
         // --- CONTROL DE AUDIO AUTORIZADO ---
         let audioContextHabilitado = null;
@@ -312,21 +345,233 @@
             }
         }
 
-        function stopPolling() {
-            if (pollingTimer) {
-                clearInterval(pollingTimer);
-                pollingTimer = null;
+        function cleanupConnections() {
+            manualDisconnect = true;
+            if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
+            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+            if (restPollingTimer) { clearInterval(restPollingTimer); restPollingTimer = null; }
+            if (ws) {
+                try { ws.close(); } catch (_) {}
+                ws = null;
             }
         }
 
         function showAuthScreen(errorMsg = "") {
-            stopPolling();
+            cleanupConnections();
             terminalView.classList.add("hidden");
             changeKeyBtn.classList.add("hidden");
             authPanel.classList.remove("hidden");
             authError.innerText = errorMsg;
             apiKeyInput.value = "";
             apiKeyInput.focus();
+        }
+
+        function renderDashboard(data) {
+            if (!data || Object.keys(data).length === 0) return;
+
+            dashboard.innerHTML = "";
+            for (const [ticker, datos] of Object.entries(data)) {
+                const zscore = parseFloat(datos.jerk_zscore).toFixed(2);
+                const regimen = datos.regimen || "NORMAL";
+                const session = (datos.session || "").toUpperCase();
+
+                let claseAlerta = "";
+                let claseBadge = "";
+                let textoBadge = "✅ NORMAL";
+                let colorZScore = "#00ffcc";
+
+                const esPeligro =
+                    regimen.includes("CAÍDA LIBRE") ||
+                    regimen.includes("SHOCK NEGATIVO") ||
+                    regimen.includes("COLAPSO") ||
+                    regimen.includes("FRENADA BRUSCA");
+                const esExito =
+                    regimen.includes("IGNICIÓN") ||
+                    regimen.includes("SHOCK POSITIVO");
+
+                if (esPeligro) {
+                    claseAlerta = "alerta-peligro";
+                    claseBadge = "alert-red";
+                    textoBadge = "🚨 PELIGRO";
+                    colorZScore = "#ff7b72";
+
+                    if (!memoriaAlertas[ticker]) {
+                        playPing();
+                        memoriaAlertas[ticker] = true;
+                    }
+                } else if (esExito) {
+                    claseAlerta = "alerta-exito";
+                    claseBadge = "alert-green";
+                    textoBadge = "🔥 IGNICIÓN";
+                    colorZScore = "#22c55e";
+                    memoriaAlertas[ticker] = false;
+                } else {
+                    memoriaAlertas[ticker] = false;
+                }
+
+                const sessionHtml = session
+                    ? `<span class="session-tag ${session === "RTH" ? "session-rth" : "session-ext"}">${session}</span>`
+                    : "";
+
+                const card = document.createElement("div");
+                card.className = `card ${claseAlerta}`;
+                card.innerHTML = `
+                    <div class="ticker-name">
+                        <div class="ticker-left">
+                            <span>${ticker}</span>
+                            ${sessionHtml}
+                        </div>
+                        <span class="status-badge ${claseBadge}">${textoBadge}</span>
+                    </div>
+                    <div class="metric"><span>Precio:</span> <span>$${parseFloat(datos.precio).toFixed(2)}</span></div>
+                    <div class="metric"><span>Velocidad:</span> <span>${parseFloat(datos.velocidad).toFixed(4)} $/s</span></div>
+                    <div class="metric"><span>Aceleración:</span> <span>${parseFloat(datos.aceleracion).toFixed(5)} $/s²</span></div>
+                    <div class="metric" style="color: ${colorZScore}; font-weight: bold;">
+                        <span>Z-Score (Jerk):</span> <span>${zscore} σ</span>
+                    </div>
+                    <div class="metric" style="font-size: 0.9em; color: #8b949e; margin-top: 15px;">
+                        <span>Estado:</span> <span>${regimen}</span>
+                    </div>
+                `;
+                dashboard.appendChild(card);
+            }
+        }
+
+        function sendWsPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                lastPingSent = performance.now();
+                ws.send("ping");
+            }
+        }
+
+        function connectWebSocket() {
+            cleanupConnections();
+            manualDisconnect = false;
+
+            transportBadge.innerText = "Canal: WSS (Live)";
+            transportBadge.style.color = "#00ffcc";
+            reloj.innerText = "🔌 Conectando a wss://api.leviatan-quant.com...";
+            reloj.style.color = "#8b949e";
+
+            const url = `${WS_BASE}?api_key=${encodeURIComponent(activeApiKey)}`;
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                reloj.innerText = "🟢 WebSocket conectado. Esperando barras en vivo...";
+                reloj.style.color = "#22c55e";
+                sendWsPing();
+                wsPingTimer = setInterval(sendWsPing, 10000);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+
+                    if (msg.type === "pong" && lastPingSent > 0) {
+                        const rtt = Math.round(performance.now() - lastPingSent);
+                        latenciaDiv.innerText = `Latencia WS: ${rtt} ms`;
+                        latenciaDiv.style.color = rtt > 250 ? "#d29922" : "#00ffcc";
+                        return;
+                    }
+
+                    if (msg.type === "status") {
+                        reloj.innerText = `🕒 ${msg.message}`;
+                        reloj.style.color = "#8b949e";
+                        return;
+                    }
+
+                    if (msg.type === "market_state" && msg.data) {
+                        const ahora = new Date();
+                        reloj.innerText = `🟢 Stream en vivo · Último tick: ${ahora.toLocaleTimeString()}`;
+                        reloj.style.color = "#22c55e";
+                        renderDashboard(msg.data);
+                    }
+                } catch (err) {
+                    console.error("Error procesando frame WS:", err);
+                }
+            };
+
+            ws.onclose = (event) => {
+                if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null; }
+                if (manualDisconnect) return;
+
+                if (event.code === 4003) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    activeApiKey = "";
+                    dashboard.innerHTML = "";
+                    showAuthScreen("⛔ Acceso denegado: Licencia B2B inválida, expirada o revocada.");
+                    return;
+                }
+
+                if (event.code === 4008) {
+                    startRestFallback();
+                    return;
+                }
+
+                reloj.innerText = "🟠 Conexión WebSocket perdida. Reconectando en 3s...";
+                reloj.style.color = "#d29922";
+                latenciaDiv.innerText = "Latencia: -- ms";
+                wsReconnectTimer = setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = () => {
+                // El evento onclose gestiona la reconexión o degradación
+            };
+        }
+
+        // --- RESPALDO REST AUTOMÁTICO PARA PLANES SIN WEBSOCKET (Ej. Sandbox) ---
+        async function fetchRestState() {
+            try {
+                const startFetch = performance.now();
+                const response = await fetch(`${API_BASE}?nocache=${Date.now()}`, {
+                    method: "GET",
+                    headers: { "X-API-Key": activeApiKey }
+                });
+                const latenciaMs = Math.round(performance.now() - startFetch);
+
+                if (response.status === 403) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    activeApiKey = "";
+                    dashboard.innerHTML = "";
+                    showAuthScreen("⛔ Acceso denegado: Licencia B2B inválida, expirada o revocada.");
+                    return;
+                }
+
+                if (response.status === 429) {
+                    reloj.innerText = "⚠️ Rate limit excedido. Esperando ventana...";
+                    reloj.style.color = "#d29922";
+                    return;
+                }
+
+                const json = await response.json();
+                if (response.status === 503 || json.detail) {
+                    reloj.innerText = "🕒 Esperando barras en vivo de Alpaca...";
+                    reloj.style.color = "#8b949e";
+                    latenciaDiv.innerText = `Latencia REST: ${latenciaMs} ms`;
+                    return;
+                }
+
+                if (json.data) {
+                    const ahora = new Date();
+                    reloj.innerText = `🟢 Conectado (REST) · Última actualización: ${ahora.toLocaleTimeString()}`;
+                    reloj.style.color = "#22c55e";
+                    latenciaDiv.innerText = `Latencia REST: ${latenciaMs} ms`;
+                    latenciaDiv.style.color = latenciaMs > 300 ? "#d29922" : "#00ffcc";
+                    renderDashboard(json.data);
+                }
+            } catch (_) {
+                reloj.innerText = "❌ Error de conexión REST...";
+                reloj.style.color = "#ff7b72";
+            }
+        }
+
+        function startRestFallback() {
+            cleanupConnections();
+            manualDisconnect = false;
+            transportBadge.innerText = "Canal: REST (Sandbox)";
+            transportBadge.style.color = "#d29922";
+            fetchRestState();
+            restPollingTimer = setInterval(fetchRestState, 1500);
         }
 
         function startTerminal(key) {
@@ -336,11 +581,7 @@
             authPanel.classList.add("hidden");
             terminalView.classList.remove("hidden");
             changeKeyBtn.classList.remove("hidden");
-
-            stopPolling();
-            actualizarDatos();
-            // 1500ms = 40 req/min (compatible tanto con Sandbox 60 rpm como Institucional 600 rpm)
-            pollingTimer = setInterval(actualizarDatos, 1500);
+            connectWebSocket();
         }
 
         authForm.addEventListener("submit", (e) => {
@@ -357,122 +598,6 @@
             showAuthScreen("");
         });
 
-        async function actualizarDatos() {
-            if (!activeApiKey) {
-                showAuthScreen();
-                return;
-            }
-
-            try {
-                const startFetch = performance.now();
-                const response = await fetch(`${API_BASE}?nocache=${Date.now()}`, {
-                    method: "GET",
-                    headers: {
-                        "X-API-Key": activeApiKey
-                    }
-                });
-                const latenciaMs = Math.round(performance.now() - startFetch);
-
-                if (response.status === 403) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    activeApiKey = "";
-                    dashboard.innerHTML = "";
-                    showAuthScreen("⛔ Acceso denegado: Licencia B2B inválida o revocada.");
-                    return;
-                }
-
-                if (response.status === 429) {
-                    reloj.innerText = "⚠️ Rate limit excedido. Reduciendo frecuencia...";
-                    reloj.style.color = "#d29922";
-                    latenciaDiv.innerText = `Latencia: ${latenciaMs} ms`;
-                    return;
-                }
-
-                const json = await response.json();
-
-                if (response.status === 503 || json.detail) {
-                    reloj.innerText = "🕒 Mercado cerrado / Esperando barras en vivo de Alpaca...";
-                    reloj.style.color = "#8b949e";
-                    latenciaDiv.innerText = `Latencia: ${latenciaMs} ms`;
-                    dashboard.innerHTML = "";
-                    return;
-                }
-
-                if (!json.data || Object.keys(json.data).length === 0) {
-                    return;
-                }
-
-                const ahora = new Date();
-                reloj.innerText = `🟢 Conectado. Última actualización: ${ahora.toLocaleTimeString()}`;
-                reloj.style.color = "#22c55e";
-
-                latenciaDiv.innerText = `Latencia de red: ${latenciaMs} ms`;
-                latenciaDiv.style.color = latenciaMs > 300 ? "#d29922" : "#00ffcc";
-
-                dashboard.innerHTML = "";
-
-                for (const [ticker, datos] of Object.entries(json.data)) {
-                    const zscore = parseFloat(datos.jerk_zscore).toFixed(2);
-                    const regimen = datos.regimen || "";
-
-                    let claseAlerta = "";
-                    let claseBadge = "";
-                    let textoBadge = "✅ NORMAL";
-                    let colorZScore = "#00ffcc";
-
-                    const esPeligro = regimen.includes("CAÍDA LIBRE") || regimen.includes("SHOCK NEGATIVO") || regimen.includes("COLAPSO") || regimen.includes("FRENADA BRUSCA");
-                    const esExito = regimen.includes("IGNICIÓN") || regimen.includes("SHOCK POSITIVO");
-
-                    if (esPeligro) {
-                        claseAlerta = "alerta-peligro";
-                        claseBadge = "alert-red";
-                        textoBadge = "🚨 PELIGRO";
-                        colorZScore = "#ff7b72";
-
-                        if (!memoriaAlertas[ticker]) {
-                            playPing();
-                            memoriaAlertas[ticker] = true;
-                        }
-                    } else if (esExito) {
-                        claseAlerta = "alerta-exito";
-                        claseBadge = "alert-green";
-                        textoBadge = "🔥 IGNICIÓN";
-                        colorZScore = "#22c55e";
-                        memoriaAlertas[ticker] = false;
-                    } else {
-                        memoriaAlertas[ticker] = false;
-                    }
-
-                    const card = document.createElement("div");
-                    card.className = `card ${claseAlerta}`;
-
-                    card.innerHTML = `
-                        <div class="ticker-name">
-                            ${ticker}
-                            <span class="status-badge ${claseBadge}">
-                                ${textoBadge}
-                            </span>
-                        </div>
-                        <div class="metric"><span>Precio:</span> <span>$${parseFloat(datos.precio).toFixed(2)}</span></div>
-                        <div class="metric"><span>Velocidad:</span> <span>${parseFloat(datos.velocidad).toFixed(4)} $/s</span></div>
-                        <div class="metric"><span>Aceleración:</span> <span>${parseFloat(datos.aceleracion).toFixed(5)} $/s²</span></div>
-                        <div class="metric" style="color: ${colorZScore}; font-weight: bold;">
-                            <span>Z-Score (Jerk):</span> <span>${zscore} σ</span>
-                        </div>
-                        <div class="metric" style="font-size: 0.9em; color: #8b949e; margin-top: 15px;">
-                            <span>Estado:</span> <span>${regimen}</span>
-                        </div>
-                    `;
-                    dashboard.appendChild(card);
-                }
-            } catch (error) {
-                reloj.innerText = "❌ Error de conexión o servidor reiniciando...";
-                reloj.style.color = "#ff7b72";
-                latenciaDiv.innerText = "Latencia: -- ms";
-            }
-        }
-
-        // Arranque inicial
         if (activeApiKey) {
             startTerminal(activeApiKey);
         } else {
